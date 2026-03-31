@@ -1,0 +1,270 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>InternAI | Smart Internship Tracker</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/style.css">
+</head>
+<body>
+  <div class="page-shell">
+    <header class="hero">
+      <div>
+        <p class="eyebrow">🎯 InternAI</p>
+        <h1>Smart Internship Tracker</h1>
+        <p class="subtitle">Automated scraping, scoring, and tracking for internship opportunities that matter.</p>
+      </div>
+      <div class="hero-panel">
+        <span class="hero-label">Last scraped</span>
+        <strong id="lastScraped">Never</strong>
+      </div>
+    </header>
+
+    <section class="stats-grid">
+      <article class="stat-card">
+        <span>Total Internships</span>
+        <strong id="totalStat">0</strong>
+      </article>
+      <article class="stat-card">
+        <span>Average Score</span>
+        <strong id="avgScoreStat">0</strong>
+      </article>
+      <article class="stat-card">
+        <span>Remote/WFH Count</span>
+        <strong id="remoteStat">0</strong>
+      </article>
+      <article class="stat-card">
+        <span>Scraped Today</span>
+        <strong id="todayStat">0</strong>
+      </article>
+    </section>
+
+    <section class="controls">
+      <div class="search-wrap">
+        <input id="searchInput" type="search" placeholder="Search by title or company">
+      </div>
+      <select id="filterSelect" aria-label="Filter internships">
+        <option value="all">All</option>
+        <option value="remote">Remote</option>
+        <option value="high-score">High Score (&gt;60)</option>
+      </select>
+      <select id="sortSelect" aria-label="Sort internships">
+        <option value="score">Score</option>
+        <option value="date">Date</option>
+        <option value="stipend">Stipend</option>
+      </select>
+      <button id="scrapeButton" class="scrape-button" type="button">🔍 Scrape Now</button>
+      <div id="spinner" class="spinner hidden" aria-live="polite"></div>
+    </section>
+
+    <section id="emptyState" class="empty-state hidden">
+      <h2>No internships yet. Click Scrape Now!</h2>
+      <p>Fresh internships will appear here after the first successful scrape.</p>
+    </section>
+
+    <section id="internshipGrid" class="internship-grid"></section>
+  </div>
+
+  <script>
+    const state = {
+      internships: []
+    };
+
+    const elements = {
+      lastScraped: document.getElementById('lastScraped'),
+      totalStat: document.getElementById('totalStat'),
+      avgScoreStat: document.getElementById('avgScoreStat'),
+      remoteStat: document.getElementById('remoteStat'),
+      todayStat: document.getElementById('todayStat'),
+      searchInput: document.getElementById('searchInput'),
+      filterSelect: document.getElementById('filterSelect'),
+      sortSelect: document.getElementById('sortSelect'),
+      scrapeButton: document.getElementById('scrapeButton'),
+      spinner: document.getElementById('spinner'),
+      emptyState: document.getElementById('emptyState'),
+      internshipGrid: document.getElementById('internshipGrid')
+    };
+
+    function formatDate(value) {
+      if (!value) {
+        return 'Unknown';
+      }
+
+      const date = new Date(value);
+      if (Number.isNaN(date.getTime())) {
+        return value;
+      }
+
+      return date.toLocaleString();
+    }
+
+    function updateLastScraped() {
+      if (!state.internships.length) {
+        elements.lastScraped.textContent = 'Never';
+        return;
+      }
+
+      const latest = [...state.internships]
+        .sort((first, second) => new Date(second.date_scraped) - new Date(first.date_scraped))[0];
+
+      elements.lastScraped.textContent = formatDate(latest.date_scraped);
+    }
+
+    async function fetchStats() {
+      try {
+        const response = await fetch('/api/stats');
+        const stats = await response.json();
+        elements.totalStat.textContent = stats.total || 0;
+        elements.avgScoreStat.textContent = Math.round(stats.avgScore || 0);
+        elements.remoteStat.textContent = stats.remoteCount || 0;
+        elements.todayStat.textContent = stats.todayCount || 0;
+      } catch (error) {
+        console.error('Failed to fetch stats:', error);
+      }
+    }
+
+    async function fetchInternships() {
+      try {
+        const response = await fetch('/api/internships');
+        state.internships = await response.json();
+        updateLastScraped();
+        renderInternships();
+      } catch (error) {
+        console.error('Failed to fetch internships:', error);
+      }
+    }
+
+    function getScoreClass(score) {
+      if (score > 60) {
+        return 'score-good';
+      }
+
+      if (score >= 30) {
+        return 'score-medium';
+      }
+
+      return 'score-low';
+    }
+
+    function getFilteredInternships() {
+      const searchTerm = elements.searchInput.value.trim().toLowerCase();
+      const filterValue = elements.filterSelect.value;
+      const sortValue = elements.sortSelect.value;
+
+      const filtered = state.internships.filter((internship) => {
+        const matchesSearch =
+          !searchTerm ||
+          internship.title.toLowerCase().includes(searchTerm) ||
+          internship.company.toLowerCase().includes(searchTerm);
+
+        const matchesFilter =
+          filterValue === 'all' ||
+          (filterValue === 'remote' && Number(internship.is_remote) === 1) ||
+          (filterValue === 'high-score' && Number(internship.score) > 60);
+
+        return matchesSearch && matchesFilter;
+      });
+
+      return filtered.sort((first, second) => {
+        if (sortValue === 'date') {
+          return new Date(second.date_scraped) - new Date(first.date_scraped);
+        }
+
+        if (sortValue === 'stipend') {
+          return Number(second.stipend_value || 0) - Number(first.stipend_value || 0);
+        }
+
+        return Number(second.score || 0) - Number(first.score || 0);
+      });
+    }
+
+    function renderInternships() {
+      const internships = getFilteredInternships();
+      elements.internshipGrid.innerHTML = '';
+
+      if (!internships.length) {
+        elements.emptyState.classList.remove('hidden');
+        return;
+      }
+
+      elements.emptyState.classList.add('hidden');
+
+      internships.forEach((internship, index) => {
+        const card = document.createElement('article');
+        card.className = 'internship-card';
+        card.style.animationDelay = `${index * 60}ms`;
+        const locationClass = Number(internship.is_remote) === 1 ? 'location-chip remote' : 'location-chip';
+
+        card.innerHTML = `
+          <span class="score-badge ${getScoreClass(Number(internship.score || 0))}">${Number(internship.score || 0)}/100</span>
+          <h3>${internship.title}</h3>
+          <p class="company">${internship.company}</p>
+          <div class="meta-line">💰 <span>${internship.stipend || 'Not specified'}</span></div>
+          <div class="meta-line">📍 <span class="${locationClass}">${internship.location || 'Not specified'}</span></div>
+          <div class="meta-line">📅 <span>${formatDate(internship.date_scraped)}</span></div>
+          <div class="card-actions">
+            <a class="apply-button" href="${internship.link}" target="_blank" rel="noopener noreferrer">Apply</a>
+            <button class="delete-button" type="button" data-id="${internship.id}">🗑</button>
+          </div>
+        `;
+
+        elements.internshipGrid.appendChild(card);
+      });
+
+      document.querySelectorAll('.delete-button').forEach((button) => {
+        button.addEventListener('click', async () => {
+          const internshipId = button.getAttribute('data-id');
+          if (!internshipId) {
+            return;
+          }
+
+          try {
+            await fetch(`/api/internships/${internshipId}`, { method: 'DELETE' });
+            await refreshDashboard();
+          } catch (error) {
+            console.error('Failed to delete internship:', error);
+          }
+        });
+      });
+    }
+
+    function setLoading(isLoading) {
+      elements.scrapeButton.disabled = isLoading;
+      elements.spinner.classList.toggle('hidden', !isLoading);
+      elements.scrapeButton.textContent = isLoading ? 'Scraping...' : '🔍 Scrape Now';
+    }
+
+    async function triggerScrape() {
+      try {
+        setLoading(true);
+        const response = await fetch('/api/scrape', { method: 'POST' });
+        const result = await response.json();
+        if (!response.ok || !result.success) {
+          throw new Error(result.message || 'Scrape failed');
+        }
+
+        await refreshDashboard();
+      } catch (error) {
+        console.error('Failed to scrape internships:', error);
+        alert(error.message || 'Failed to scrape internships.');
+      } finally {
+        setLoading(false);
+      }
+    }
+
+    async function refreshDashboard() {
+      await Promise.all([fetchStats(), fetchInternships()]);
+    }
+
+    elements.searchInput.addEventListener('input', renderInternships);
+    elements.filterSelect.addEventListener('change', renderInternships);
+    elements.sortSelect.addEventListener('change', renderInternships);
+    elements.scrapeButton.addEventListener('click', triggerScrape);
+
+    refreshDashboard();
+  </script>
+</body>
+</html>

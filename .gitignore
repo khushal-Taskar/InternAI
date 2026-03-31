@@ -1,0 +1,4 @@
+node_modules/
+internai.db
+.env
+*.log
