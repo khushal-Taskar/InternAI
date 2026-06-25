@@ -55,7 +55,7 @@ app.use('/api/', apiLimiter);
 
 // Static files with caching
 app.use(express.static(path.join(__dirname, 'public'), {
-  maxAge: 0,         // no browser caching — always serve fresh files
+  maxAge: 0,
   etag: false
 }));
 
@@ -65,7 +65,7 @@ app.get('/health', (req, res) => {
 });
 
 // ── Auth Routes ──
-app.post('/api/auth/register', authLimiter, (req, res) => {
+app.post('/api/auth/register', authLimiter, async (req, res) => {
   try {
     const { name, email, password } = req.body;
 
@@ -82,19 +82,19 @@ app.post('/api/auth/register', authLimiter, (req, res) => {
       return res.status(400).json({ success: false, message: 'Invalid email format.' });
     }
 
-    const existing = findUserByEmail(email);
+    const existing = await findUserByEmail(email);
     if (existing) {
       return res.status(409).json({ success: false, message: 'Email already registered.' });
     }
 
     const password_hash = hashPassword(password);
-    const result = createUser({ name: name.trim(), email: email.trim(), password_hash });
+    const result = await createUser({ name: name.trim(), email: email.trim(), password_hash });
 
     if (result.error) {
       return res.status(409).json({ success: false, message: result.error });
     }
 
-    const user = getUserById(result.id);
+    const user = await getUserById(result.id);
     const token = generateToken(user);
 
     res.status(201).json({
@@ -109,7 +109,7 @@ app.post('/api/auth/register', authLimiter, (req, res) => {
   }
 });
 
-app.post('/api/auth/login', authLimiter, (req, res) => {
+app.post('/api/auth/login', authLimiter, async (req, res) => {
   try {
     const { email, password } = req.body;
 
@@ -117,7 +117,7 @@ app.post('/api/auth/login', authLimiter, (req, res) => {
       return res.status(400).json({ success: false, message: 'Email and password are required.' });
     }
 
-    const user = findUserByEmail(email);
+    const user = await findUserByEmail(email);
     if (!user) {
       return res.status(401).json({ success: false, message: 'Invalid email or password.' });
     }
@@ -140,14 +140,14 @@ app.post('/api/auth/login', authLimiter, (req, res) => {
   }
 });
 
-app.get('/api/auth/me', authMiddleware, (req, res) => {
+app.get('/api/auth/me', authMiddleware, async (req, res) => {
   try {
-    const user = getUserById(req.user.id);
+    const user = await getUserById(req.user.id);
     if (!user) {
       return res.status(404).json({ success: false, message: 'User not found.' });
     }
 
-    const applicationCount = getApplicationCount(user.id);
+    const applicationCount = await getApplicationCount(user.id);
 
     res.json({
       success: true,
@@ -160,9 +160,9 @@ app.get('/api/auth/me', authMiddleware, (req, res) => {
 });
 
 // ── Internship Routes ──
-app.get('/api/internships', optionalAuth, (req, res) => {
+app.get('/api/internships', optionalAuth, async (req, res) => {
   try {
-    const result = getAllInternships({
+    const result = await getAllInternships({
       location: req.query.location,
       min_score: req.query.min_score,
       search: req.query.search,
@@ -174,10 +174,10 @@ app.get('/api/internships', optionalAuth, (req, res) => {
 
     // If user is logged in, mark which ones they've applied to
     if (req.user) {
-      const appliedIds = getUserApplicationIds(req.user.id);
+      const appliedIds = await getUserApplicationIds(req.user.id);
       result.internships = result.internships.map(i => ({
         ...i,
-        has_applied: appliedIds.includes(i.id)
+        has_applied: appliedIds.includes(Number(i.id))
       }));
     }
 
@@ -188,9 +188,9 @@ app.get('/api/internships', optionalAuth, (req, res) => {
   }
 });
 
-app.get('/api/stats', (req, res) => {
+app.get('/api/stats', async (req, res) => {
   try {
-    res.json(getStats());
+    res.json(await getStats());
   } catch (error) {
     console.error('[server] Failed to fetch stats:', error.message);
     res.status(500).json({ success: false, message: 'Failed to fetch stats' });
@@ -207,10 +207,10 @@ app.post('/api/scrape', scrapeLimiter, async (req, res) => {
     });
 
     let insertedCount = 0;
-    enrichedInternships.forEach((internship) => {
-      const result = insertInternship(internship);
+    for (const internship of enrichedInternships) {
+      const result = await insertInternship(internship);
       insertedCount += result.changes || 0;
-    });
+    }
 
     await sendTelegramNotification(enrichedInternships);
 
@@ -226,9 +226,9 @@ app.post('/api/scrape', scrapeLimiter, async (req, res) => {
   }
 });
 
-app.delete('/api/internships/:id', authMiddleware, (req, res) => {
+app.delete('/api/internships/:id', authMiddleware, async (req, res) => {
   try {
-    const result = deleteInternship(req.params.id);
+    const result = await deleteInternship(req.params.id);
     if (!result.changes) {
       return res.status(404).json({ success: false, message: 'Internship not found' });
     }
@@ -239,9 +239,9 @@ app.delete('/api/internships/:id', authMiddleware, (req, res) => {
   }
 });
 
-app.delete('/api/clear', authMiddleware, (req, res) => {
+app.delete('/api/clear', authMiddleware, async (req, res) => {
   try {
-    clearAll();
+    await clearAll();
     res.json({ success: true, message: 'All internships cleared successfully' });
   } catch (error) {
     console.error('[server] Failed to clear internships:', error.message);
@@ -250,14 +250,14 @@ app.delete('/api/clear', authMiddleware, (req, res) => {
 });
 
 // ── Profile / Application Routes ──
-app.post('/api/applications/:internshipId', authMiddleware, (req, res) => {
+app.post('/api/applications/:internshipId', authMiddleware, async (req, res) => {
   try {
-    const internship = getInternshipById(req.params.internshipId);
+    const internship = await getInternshipById(req.params.internshipId);
     if (!internship) {
       return res.status(404).json({ success: false, message: 'Internship not found.' });
     }
 
-    const result = addApplication(req.user.id, internship.id, req.body.notes || '');
+    const result = await addApplication(req.user.id, internship.id, req.body.notes || '');
     if (result.error) {
       return res.status(409).json({ success: false, message: result.error });
     }
@@ -269,9 +269,9 @@ app.post('/api/applications/:internshipId', authMiddleware, (req, res) => {
   }
 });
 
-app.delete('/api/applications/:internshipId', authMiddleware, (req, res) => {
+app.delete('/api/applications/:internshipId', authMiddleware, async (req, res) => {
   try {
-    const result = removeApplication(req.user.id, req.params.internshipId);
+    const result = await removeApplication(req.user.id, req.params.internshipId);
     if (!result.changes) {
       return res.status(404).json({ success: false, message: 'Application not found.' });
     }
@@ -282,9 +282,9 @@ app.delete('/api/applications/:internshipId', authMiddleware, (req, res) => {
   }
 });
 
-app.get('/api/applications', authMiddleware, (req, res) => {
+app.get('/api/applications', authMiddleware, async (req, res) => {
   try {
-    const applications = getUserApplications(req.user.id);
+    const applications = await getUserApplications(req.user.id);
     res.json({ success: true, applications });
   } catch (error) {
     console.error('[server] Failed to get applications:', error.message);
