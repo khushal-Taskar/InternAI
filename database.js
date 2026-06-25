@@ -9,6 +9,26 @@ const db = createClient({
   authToken: process.env.TURSO_AUTH_TOKEN || undefined
 });
 
+// ── Row Serialization Helpers ──
+// libSQL Row objects are array-like and don't serialize as plain objects.
+// These helpers convert them to standard JS objects safe for JSON.
+function rowsToPlain(result) {
+  const cols = result.columns;
+  return result.rows.map(row => {
+    const obj = {};
+    cols.forEach((col, i) => {
+      const val = row[i];
+      obj[col] = typeof val === 'bigint' ? Number(val) : val;
+    });
+    return obj;
+  });
+}
+
+function rowToPlain(result) {
+  if (!result || !result.rows.length) return null;
+  return rowsToPlain(result)[0];
+}
+
 // ── Schema Init ──
 
 async function initDatabase() {
@@ -170,7 +190,7 @@ async function getAllInternships(filters = {}) {
     });
 
     return {
-      internships: dataResult.rows,
+      internships: rowsToPlain(dataResult),
       pagination: { page, limit, total, totalPages: Math.ceil(total / limit) }
     };
   } catch (error) {
@@ -183,7 +203,7 @@ async function getInternshipById(id) {
   try {
     await dbReady;
     const result = await db.execute({ sql: 'SELECT * FROM internships WHERE id = ?', args: [id] });
-    return result.rows[0] || null;
+    return rowToPlain(result);
   } catch (error) {
     console.error('[database] Failed to get internship:', error.message);
     return null;
@@ -203,7 +223,7 @@ async function getStats() {
       FROM internships`,
       args: [today]
     });
-    const stats = statsResult.rows[0];
+    const stats = rowToPlain(statsResult) || {};
 
     const sourceResult = await db.execute('SELECT source, COUNT(*) as count FROM internships GROUP BY source');
 
@@ -212,7 +232,7 @@ async function getStats() {
       avgScore: Number(stats.avgScore || 0),
       remoteCount: Number(stats.remoteCount || 0),
       todayCount: Number(stats.todayCount || 0),
-      sources: sourceResult.rows
+      sources: rowsToPlain(sourceResult)
     };
   } catch (error) {
     console.error('[database] Failed to fetch stats:', error.message);
@@ -268,7 +288,7 @@ async function findUserByEmail(email) {
   try {
     await dbReady;
     const result = await db.execute({ sql: 'SELECT * FROM users WHERE email = ?', args: [email.toLowerCase()] });
-    return result.rows[0] || null;
+    return rowToPlain(result);
   } catch (error) {
     console.error('[database] Failed to find user:', error.message);
     return null;
@@ -282,7 +302,7 @@ async function getUserById(id) {
       sql: 'SELECT id, name, email, avatar_color, created_at FROM users WHERE id = ?',
       args: [id]
     });
-    return result.rows[0] || null;
+    return rowToPlain(result);
   } catch (error) {
     console.error('[database] Failed to get user:', error.message);
     return null;
@@ -335,7 +355,7 @@ async function getUserApplications(userId) {
             ORDER BY a.applied_at DESC`,
       args: [userId]
     });
-    return result.rows;
+    return rowsToPlain(result);
   } catch (error) {
     console.error('[database] Failed to get user applications:', error.message);
     return [];
@@ -349,7 +369,7 @@ async function getUserApplicationIds(userId) {
       sql: 'SELECT internship_id FROM applications WHERE user_id = ?',
       args: [userId]
     });
-    return result.rows.map(r => Number(r.internship_id));
+    return rowsToPlain(result).map(r => Number(r.internship_id));
   } catch (error) {
     return [];
   }
@@ -362,7 +382,8 @@ async function getApplicationCount(userId) {
       sql: 'SELECT COUNT(*) as count FROM applications WHERE user_id = ?',
       args: [userId]
     });
-    return Number(result.rows[0].count);
+    const row = rowToPlain(result);
+    return row ? Number(row.count) : 0;
   } catch (error) {
     return 0;
   }
