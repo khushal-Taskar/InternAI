@@ -33,7 +33,8 @@ function rowToPlain(result) {
 
 async function initDatabase() {
   try {
-    await db.executeMultiple(`
+    // Use individual execute calls — executeMultiple is not supported by Turso HTTP client
+    await db.execute(`
       CREATE TABLE IF NOT EXISTS internships (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         title TEXT,
@@ -50,8 +51,10 @@ async function initDatabase() {
         posted_date TEXT,
         date_scraped TEXT,
         status TEXT DEFAULT 'New'
-      );
+      )
+    `);
 
+    await db.execute(`
       CREATE TABLE IF NOT EXISTS users (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         name TEXT NOT NULL,
@@ -59,8 +62,10 @@ async function initDatabase() {
         password_hash TEXT NOT NULL,
         avatar_color TEXT DEFAULT '#7c3aed',
         created_at TEXT DEFAULT (datetime('now'))
-      );
+      )
+    `);
 
+    await db.execute(`
       CREATE TABLE IF NOT EXISTS applications (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         user_id INTEGER NOT NULL,
@@ -71,17 +76,17 @@ async function initDatabase() {
         FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
         FOREIGN KEY (internship_id) REFERENCES internships(id) ON DELETE CASCADE,
         UNIQUE(user_id, internship_id)
-      );
-
-      CREATE INDEX IF NOT EXISTS idx_internships_score ON internships(score DESC);
-      CREATE INDEX IF NOT EXISTS idx_internships_date ON internships(date_scraped DESC);
-      CREATE INDEX IF NOT EXISTS idx_internships_source ON internships(source);
-      CREATE INDEX IF NOT EXISTS idx_internships_remote ON internships(is_remote);
-      CREATE INDEX IF NOT EXISTS idx_internships_stipend ON internships(stipend_value DESC);
-      CREATE INDEX IF NOT EXISTS idx_applications_user ON applications(user_id);
-      CREATE INDEX IF NOT EXISTS idx_applications_internship ON applications(internship_id);
-      CREATE INDEX IF NOT EXISTS idx_users_email ON users(email);
+      )
     `);
+
+    await db.execute(`CREATE INDEX IF NOT EXISTS idx_internships_score ON internships(score DESC)`);
+    await db.execute(`CREATE INDEX IF NOT EXISTS idx_internships_date ON internships(date_scraped DESC)`);
+    await db.execute(`CREATE INDEX IF NOT EXISTS idx_internships_source ON internships(source)`);
+    await db.execute(`CREATE INDEX IF NOT EXISTS idx_internships_remote ON internships(is_remote)`);
+    await db.execute(`CREATE INDEX IF NOT EXISTS idx_internships_stipend ON internships(stipend_value DESC)`);
+    await db.execute(`CREATE INDEX IF NOT EXISTS idx_applications_user ON applications(user_id)`);
+    await db.execute(`CREATE INDEX IF NOT EXISTS idx_applications_internship ON applications(internship_id)`);
+    await db.execute(`CREATE INDEX IF NOT EXISTS idx_users_email ON users(email)`);
 
     // Add columns to existing tables if missing (ignore errors if they exist)
     const alterCols = [
@@ -96,8 +101,10 @@ async function initDatabase() {
     console.log('[database] Database ready with all tables and indexes.');
   } catch (error) {
     console.error('[database] Failed to initialize database:', error.message);
+    throw error; // re-throw so dbReady rejects and callers know init failed
   }
 }
+
 
 // Run init immediately (top-level await workaround for CommonJS)
 const dbReady = initDatabase();
