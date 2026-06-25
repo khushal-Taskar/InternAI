@@ -246,12 +246,25 @@ async function scrapeNaukri() {
 // ── Combined Scraper ──
 
 async function scrapeInternships() {
+  // Vercel serverless functions have a 10s timeout — live scraping of external
+  // sites takes too long and those sites block bots anyway.
+  // On Vercel, use mock data instantly; on local dev, attempt real scraping.
+  const isVercel = !!(process.env.VERCEL || process.env.VERCEL_ENV);
+
+  if (isVercel) {
+    console.log('[scraper] Vercel environment detected — using mock data for instant response.');
+    return [
+      ...buildMockResults(MOCK_INTERNSHALA, 'Internshala'),
+      ...buildMockResults(MOCK_AICTE, 'AICTE'),
+      ...buildMockResults(MOCK_NAUKRI, 'Naukri')
+    ];
+  }
+
   try {
     console.log('[scraper] Starting multi-source scrape...');
     const allResults = [];
     const seenLinks = new Set();
 
-    // Scrape all sources with delays to avoid rate limiting
     const internshalaResults = await scrapeInternshala();
     internshalaResults.forEach(item => {
       if (!seenLinks.has(item.link)) { seenLinks.add(item.link); allResults.push(item); }
@@ -271,7 +284,7 @@ async function scrapeInternships() {
       if (!seenLinks.has(item.link)) { seenLinks.add(item.link); allResults.push(item); }
     });
 
-    console.log(`[scraper] Multi-source scrape completed: ${allResults.length} total (Internshala: ${internshalaResults.length}, AICTE: ${aicteResults.length}, Naukri: ${naukriResults.length})`);
+    console.log(`[scraper] Multi-source scrape completed: ${allResults.length} total`);
     return allResults;
   } catch (error) {
     console.error('[scraper] Multi-source scrape failed:', error.message);
