@@ -1,4 +1,7 @@
 node_modules/
 internai.db
+*.db
+*.db-shm
+*.db-wal
 .env
 *.log

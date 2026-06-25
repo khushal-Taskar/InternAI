@@ -3,268 +3,254 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>InternAI | Smart Internship Tracker</title>
+  <title>InternAI — Smart Internship Tracker | Find Internships from Internshala, AICTE &amp; Naukri</title>
+  <meta name="description" content="InternAI automatically scrapes, scores, and tracks internship opportunities from Internshala, AICTE, and Naukri.com. Find your perfect internship with AI-powered scoring.">
+  <meta name="keywords" content="internship, AICTE, Naukri, Internshala, jobs, tracking, AI, scoring">
+  <meta name="author" content="Khushal Taskar">
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🎯</text></svg>">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="/style.css">
 </head>
 <body>
-  <div class="page-shell">
-    <header class="hero">
-      <div>
-        <p class="eyebrow">🎯 InternAI</p>
-        <h1>Smart Internship Tracker</h1>
-        <p class="subtitle">Automated scraping, scoring, and tracking for internship opportunities that matter.</p>
+  <!-- Animated Background -->
+  <div class="bg-mesh" aria-hidden="true">
+    <div class="bg-orb bg-orb--1"></div>
+    <div class="bg-orb bg-orb--2"></div>
+    <div class="bg-orb bg-orb--3"></div>
+  </div>
+  <div class="bg-grid" aria-hidden="true"></div>
+
+  <div class="app-container">
+    <!-- ═══════ NAVBAR ═══════ -->
+    <nav class="navbar" id="navbar">
+      <div class="navbar-inner">
+        <a href="#" class="nav-brand" id="navBrandLink">
+          <div class="nav-brand-icon">🎯</div>
+          <span class="nav-brand-text">InternAI</span>
+        </a>
+        <div class="nav-actions">
+          <button class="nav-link nav-link--active" id="navDashboard" data-view="dashboard">Dashboard</button>
+          <button class="nav-link" id="navProfile" data-view="profile" style="display:none;">My Applications</button>
+          <button class="btn-primary" id="navAuthBtn">Sign In</button>
+          <!-- Profile avatar + dropdown wrapper -->
+          <div class="nav-avatar-wrapper" id="navAvatarWrapper" style="display:none;">
+            <button
+              class="nav-avatar"
+              id="navAvatar"
+              aria-haspopup="true"
+              aria-expanded="false"
+              aria-label="Open profile menu"
+              title="Profile menu"
+            ></button>
+
+            <!-- Profile dropdown menu -->
+            <div class="avatar-dropdown" id="avatarDropdown" role="menu" aria-label="Profile menu">
+              <!-- User info header -->
+              <div class="avatar-dropdown__header">
+                <div class="avatar-dropdown__avatar" id="dropdownAvatar"></div>
+                <div class="avatar-dropdown__user-info">
+                  <span class="avatar-dropdown__name" id="dropdownName">User</span>
+                  <span class="avatar-dropdown__email" id="dropdownEmail">user@example.com</span>
+                </div>
+              </div>
+
+              <div class="avatar-dropdown__divider"></div>
+
+              <!-- Menu items -->
+              <button class="avatar-dropdown__item" id="dropdownViewProfile" role="menuitem">
+                <span class="avatar-dropdown__item-icon">👤</span>
+                <span>View Profile</span>
+              </button>
+              <button class="avatar-dropdown__item" id="dropdownSettings" role="menuitem">
+                <span class="avatar-dropdown__item-icon">⚙️</span>
+                <span>Settings</span>
+              </button>
+
+              <div class="avatar-dropdown__divider"></div>
+
+              <button class="avatar-dropdown__item avatar-dropdown__item--danger" id="dropdownLogout" role="menuitem">
+                <span class="avatar-dropdown__item-icon">🚪</span>
+                <span>Logout</span>
+              </button>
+            </div>
+          </div>
+        </div>
       </div>
-      <div class="hero-panel">
-        <span class="hero-label">Last scraped</span>
-        <strong id="lastScraped">Never</strong>
-      </div>
-    </header>
+    </nav>
 
-    <section class="stats-grid">
-      <article class="stat-card">
-        <span>Total Internships</span>
-        <strong id="totalStat">0</strong>
-      </article>
-      <article class="stat-card">
-        <span>Average Score</span>
-        <strong id="avgScoreStat">0</strong>
-      </article>
-      <article class="stat-card">
-        <span>Remote/WFH Count</span>
-        <strong id="remoteStat">0</strong>
-      </article>
-      <article class="stat-card">
-        <span>Scraped Today</span>
-        <strong id="todayStat">0</strong>
-      </article>
-    </section>
+    <div class="page-content">
+      <!-- ═══════ HERO ═══════ -->
+      <section class="hero" id="heroSection">
+        <div class="hero-badge">
+          <span class="pulse-dot"></span>
+          Live Scraping Active
+        </div>
+        <h1>Find Your Dream<br><span class="gradient-text">Internship with AI</span></h1>
+        <p class="hero-subtitle">
+          Automatically scrapes, scores, and tracks internship opportunities across
+          <strong>Internshala</strong>, <strong>AICTE</strong>, and <strong>Naukri.com</strong>.
+          Powered by intelligent scoring — so you see the best opportunities first.
+        </p>
+        <div class="hero-actions">
+          <button class="hero-scrape-btn" id="scrapeBtn" type="button">
+            <span class="btn-icon">🔍</span>
+            <span class="btn-spinner"></span>
+            <span class="btn-label">Scrape All Sources</span>
+          </button>
+          <button class="btn-ghost" id="heroAuthBtn">Create Free Account</button>
+        </div>
+      </section>
 
-    <section class="controls">
-      <div class="search-wrap">
-        <input id="searchInput" type="search" placeholder="Search by title or company">
-      </div>
-      <select id="filterSelect" aria-label="Filter internships">
-        <option value="all">All</option>
-        <option value="remote">Remote</option>
-        <option value="high-score">High Score (&gt;60)</option>
-      </select>
-      <select id="sortSelect" aria-label="Sort internships">
-        <option value="score">Score</option>
-        <option value="date">Date</option>
-        <option value="stipend">Stipend</option>
-      </select>
-      <button id="scrapeButton" class="scrape-button" type="button">🔍 Scrape Now</button>
-      <div id="spinner" class="spinner hidden" aria-live="polite"></div>
-    </section>
+      <!-- ═══════ STATS ═══════ -->
+      <section class="stats-section reveal" id="statsSection">
+        <div class="stats-grid">
+          <div class="stat-card stat-card--purple reveal reveal-delay-1">
+            <div class="stat-icon">📊</div>
+            <span class="stat-label">Total Internships</span>
+            <div class="stat-value" id="statTotal">0</div>
+          </div>
+          <div class="stat-card stat-card--blue reveal reveal-delay-2">
+            <div class="stat-icon">⚡</div>
+            <span class="stat-label">Average Score</span>
+            <div class="stat-value" id="statAvgScore">0</div>
+          </div>
+          <div class="stat-card stat-card--green reveal reveal-delay-3">
+            <div class="stat-icon">🏠</div>
+            <span class="stat-label">Remote / WFH</span>
+            <div class="stat-value" id="statRemote">0</div>
+          </div>
+          <div class="stat-card stat-card--orange reveal reveal-delay-4">
+            <div class="stat-icon">🆕</div>
+            <span class="stat-label">Added Today</span>
+            <div class="stat-value" id="statToday">0</div>
+          </div>
+        </div>
+      </section>
 
-    <section id="emptyState" class="empty-state hidden">
-      <h2>No internships yet. Click Scrape Now!</h2>
-      <p>Fresh internships will appear here after the first successful scrape.</p>
-    </section>
+      <!-- ═══════ DASHBOARD VIEW ═══════ -->
+      <section id="dashboardView">
+        <!-- Controls -->
+        <div class="controls-bar reveal">
+          <input class="search-input" id="searchInput" type="search" placeholder="Search by title or company..." autocomplete="off">
+          <div class="source-pills" id="sourcePills">
+            <button class="source-pill active" data-source="all">All Sources</button>
+            <button class="source-pill" data-source="internshala">Internshala</button>
+            <button class="source-pill" data-source="aicte">AICTE</button>
+            <button class="source-pill" data-source="naukri">Naukri</button>
+          </div>
+          <select class="filter-select" id="filterSelect" aria-label="Filter">
+            <option value="all">All Types</option>
+            <option value="remote">Remote Only</option>
+            <option value="high-score">High Score (60+)</option>
+          </select>
+          <select class="filter-select" id="sortSelect" aria-label="Sort">
+            <option value="score">Sort by Score</option>
+            <option value="date">Sort by Date</option>
+            <option value="stipend">Sort by Stipend</option>
+          </select>
+        </div>
 
-    <section id="internshipGrid" class="internship-grid"></section>
+        <!-- Loading Skeleton -->
+        <div class="skeleton-grid" id="loadingSkeleton" style="display:none;">
+          <div class="skeleton-card"><div class="skeleton-line skeleton-line--short"></div><div class="skeleton-line skeleton-line--title"></div><div class="skeleton-line skeleton-line--medium"></div><div class="skeleton-line skeleton-line--short"></div><div class="skeleton-line skeleton-line--medium"></div><div class="skeleton-line skeleton-line--btn"></div></div>
+          <div class="skeleton-card"><div class="skeleton-line skeleton-line--short"></div><div class="skeleton-line skeleton-line--title"></div><div class="skeleton-line skeleton-line--medium"></div><div class="skeleton-line skeleton-line--short"></div><div class="skeleton-line skeleton-line--medium"></div><div class="skeleton-line skeleton-line--btn"></div></div>
+          <div class="skeleton-card"><div class="skeleton-line skeleton-line--short"></div><div class="skeleton-line skeleton-line--title"></div><div class="skeleton-line skeleton-line--medium"></div><div class="skeleton-line skeleton-line--short"></div><div class="skeleton-line skeleton-line--medium"></div><div class="skeleton-line skeleton-line--btn"></div></div>
+          <div class="skeleton-card"><div class="skeleton-line skeleton-line--short"></div><div class="skeleton-line skeleton-line--title"></div><div class="skeleton-line skeleton-line--medium"></div><div class="skeleton-line skeleton-line--short"></div><div class="skeleton-line skeleton-line--medium"></div><div class="skeleton-line skeleton-line--btn"></div></div>
+          <div class="skeleton-card"><div class="skeleton-line skeleton-line--short"></div><div class="skeleton-line skeleton-line--title"></div><div class="skeleton-line skeleton-line--medium"></div><div class="skeleton-line skeleton-line--short"></div><div class="skeleton-line skeleton-line--medium"></div><div class="skeleton-line skeleton-line--btn"></div></div>
+          <div class="skeleton-card"><div class="skeleton-line skeleton-line--short"></div><div class="skeleton-line skeleton-line--title"></div><div class="skeleton-line skeleton-line--medium"></div><div class="skeleton-line skeleton-line--short"></div><div class="skeleton-line skeleton-line--medium"></div><div class="skeleton-line skeleton-line--btn"></div></div>
+        </div>
+
+        <!-- Empty State -->
+        <div class="empty-state hidden" id="emptyState">
+          <div class="empty-state-icon">🔭</div>
+          <h2>No internships found</h2>
+          <p>Click "Scrape All Sources" to fetch fresh internships from Internshala, AICTE, and Naukri.com.</p>
+        </div>
+
+        <!-- Internship Grid -->
+        <div class="internship-grid" id="internshipGrid"></div>
+
+        <!-- Pagination -->
+        <div class="pagination hidden" id="pagination"></div>
+      </section>
+
+      <!-- ═══════ PROFILE VIEW ═══════ -->
+      <section class="profile-section" id="profileView">
+        <div class="profile-header reveal">
+          <div class="profile-avatar" id="profileAvatar">K</div>
+          <div class="profile-info">
+            <h2 id="profileName">User</h2>
+            <p id="profileEmail">user@example.com</p>
+          </div>
+          <div class="profile-stats">
+            <div class="profile-stat">
+              <strong id="profileAppCount">0</strong>
+              <span>Applications</span>
+            </div>
+            <div class="profile-stat">
+              <strong id="profileJoinDate">—</strong>
+              <span>Member Since</span>
+            </div>
+          </div>
+        </div>
+
+        <h3 style="font-size:1.2rem; font-weight:700; margin-bottom:20px; color:var(--text-primary);">
+          📋 Your Tracked Applications
+        </h3>
+
+        <div class="application-list" id="applicationList">
+          <div class="empty-state" id="emptyApplications" style="display:none;">
+            <div class="empty-state-icon">📝</div>
+            <h2>No applications yet</h2>
+            <p>Start tracking your internship applications by clicking "Track" on any internship card.</p>
+          </div>
+        </div>
+      </section>
+
+      <!-- Footer -->
+      <footer class="site-footer">
+        <p>Built with ❤️ by <a href="https://github.com/khushal-Taskar" target="_blank" rel="noopener">Khushal Taskar</a> | ECE @ GHRCE Nagpur</p>
+        <p style="margin-top:6px; font-size:0.8rem;">Data sourced from Internshala, AICTE &amp; Naukri.com</p>
+      </footer>
+    </div>
   </div>
 
-  <script>
-    const state = {
-      internships: []
-    };
+  <!-- ═══════ AUTH MODAL ═══════ -->
+  <div class="modal-overlay" id="authModal">
+    <div class="modal" style="position:relative;">
+      <button class="modal-close" id="modalClose" type="button" aria-label="Close">✕</button>
+      <h2 id="modalTitle">Welcome Back</h2>
+      <p class="modal-subtitle" id="modalSubtitle">Sign in to track your applications</p>
 
-    const elements = {
-      lastScraped: document.getElementById('lastScraped'),
-      totalStat: document.getElementById('totalStat'),
-      avgScoreStat: document.getElementById('avgScoreStat'),
-      remoteStat: document.getElementById('remoteStat'),
-      todayStat: document.getElementById('todayStat'),
-      searchInput: document.getElementById('searchInput'),
-      filterSelect: document.getElementById('filterSelect'),
-      sortSelect: document.getElementById('sortSelect'),
-      scrapeButton: document.getElementById('scrapeButton'),
-      spinner: document.getElementById('spinner'),
-      emptyState: document.getElementById('emptyState'),
-      internshipGrid: document.getElementById('internshipGrid')
-    };
+      <div class="auth-tabs">
+        <button class="auth-tab active" id="loginTab" data-tab="login">Sign In</button>
+        <button class="auth-tab" id="registerTab" data-tab="register">Sign Up</button>
+      </div>
 
-    function formatDate(value) {
-      if (!value) {
-        return 'Unknown';
-      }
+      <div class="form-error" id="authError"></div>
 
-      const date = new Date(value);
-      if (Number.isNaN(date.getTime())) {
-        return value;
-      }
+      <form id="authForm" autocomplete="off">
+        <div class="form-group" id="nameGroup" style="display:none;">
+          <label class="form-label" for="authName">Full Name</label>
+          <input class="form-input" id="authName" type="text" placeholder="Khushal Taskar">
+        </div>
+        <div class="form-group">
+          <label class="form-label" for="authEmail">Email Address</label>
+          <input class="form-input" id="authEmail" type="email" placeholder="you@example.com" required>
+        </div>
+        <div class="form-group">
+          <label class="form-label" for="authPassword">Password</label>
+          <input class="form-input" id="authPassword" type="password" placeholder="Min. 6 characters" required minlength="6">
+        </div>
+        <button class="form-submit" id="authSubmit" type="submit">Sign In</button>
+      </form>
+    </div>
+  </div>
 
-      return date.toLocaleString();
-    }
+  <!-- Toast Container -->
+  <div class="toast-container" id="toastContainer"></div>
 
-    function updateLastScraped() {
-      if (!state.internships.length) {
-        elements.lastScraped.textContent = 'Never';
-        return;
-      }
-
-      const latest = [...state.internships]
-        .sort((first, second) => new Date(second.date_scraped) - new Date(first.date_scraped))[0];
-
-      elements.lastScraped.textContent = formatDate(latest.date_scraped);
-    }
-
-    async function fetchStats() {
-      try {
-        const response = await fetch('/api/stats');
-        const stats = await response.json();
-        elements.totalStat.textContent = stats.total || 0;
-        elements.avgScoreStat.textContent = Math.round(stats.avgScore || 0);
-        elements.remoteStat.textContent = stats.remoteCount || 0;
-        elements.todayStat.textContent = stats.todayCount || 0;
-      } catch (error) {
-        console.error('Failed to fetch stats:', error);
-      }
-    }
-
-    async function fetchInternships() {
-      try {
-        const response = await fetch('/api/internships');
-        state.internships = await response.json();
-        updateLastScraped();
-        renderInternships();
-      } catch (error) {
-        console.error('Failed to fetch internships:', error);
-      }
-    }
-
-    function getScoreClass(score) {
-      if (score > 60) {
-        return 'score-good';
-      }
-
-      if (score >= 30) {
-        return 'score-medium';
-      }
-
-      return 'score-low';
-    }
-
-    function getFilteredInternships() {
-      const searchTerm = elements.searchInput.value.trim().toLowerCase();
-      const filterValue = elements.filterSelect.value;
-      const sortValue = elements.sortSelect.value;
-
-      const filtered = state.internships.filter((internship) => {
-        const matchesSearch =
-          !searchTerm ||
-          internship.title.toLowerCase().includes(searchTerm) ||
-          internship.company.toLowerCase().includes(searchTerm);
-
-        const matchesFilter =
-          filterValue === 'all' ||
-          (filterValue === 'remote' && Number(internship.is_remote) === 1) ||
-          (filterValue === 'high-score' && Number(internship.score) > 60);
-
-        return matchesSearch && matchesFilter;
-      });
-
-      return filtered.sort((first, second) => {
-        if (sortValue === 'date') {
-          return new Date(second.date_scraped) - new Date(first.date_scraped);
-        }
-
-        if (sortValue === 'stipend') {
-          return Number(second.stipend_value || 0) - Number(first.stipend_value || 0);
-        }
-
-        return Number(second.score || 0) - Number(first.score || 0);
-      });
-    }
-
-    function renderInternships() {
-      const internships = getFilteredInternships();
-      elements.internshipGrid.innerHTML = '';
-
-      if (!internships.length) {
-        elements.emptyState.classList.remove('hidden');
-        return;
-      }
-
-      elements.emptyState.classList.add('hidden');
-
-      internships.forEach((internship, index) => {
-        const card = document.createElement('article');
-        card.className = 'internship-card';
-        card.style.animationDelay = `${index * 60}ms`;
-        const locationClass = Number(internship.is_remote) === 1 ? 'location-chip remote' : 'location-chip';
-
-        card.innerHTML = `
-          <span class="score-badge ${getScoreClass(Number(internship.score || 0))}">${Number(internship.score || 0)}/100</span>
-          <h3>${internship.title}</h3>
-          <p class="company">${internship.company}</p>
-          <div class="meta-line">💰 <span>${internship.stipend || 'Not specified'}</span></div>
-          <div class="meta-line">📍 <span class="${locationClass}">${internship.location || 'Not specified'}</span></div>
-          <div class="meta-line">📅 <span>${formatDate(internship.date_scraped)}</span></div>
-          <div class="card-actions">
-            <a class="apply-button" href="${internship.link}" target="_blank" rel="noopener noreferrer">Apply</a>
-            <button class="delete-button" type="button" data-id="${internship.id}">🗑</button>
-          </div>
-        `;
-
-        elements.internshipGrid.appendChild(card);
-      });
-
-      document.querySelectorAll('.delete-button').forEach((button) => {
-        button.addEventListener('click', async () => {
-          const internshipId = button.getAttribute('data-id');
-          if (!internshipId) {
-            return;
-          }
-
-          try {
-            await fetch(`/api/internships/${internshipId}`, { method: 'DELETE' });
-            await refreshDashboard();
-          } catch (error) {
-            console.error('Failed to delete internship:', error);
-          }
-        });
-      });
-    }
-
-    function setLoading(isLoading) {
-      elements.scrapeButton.disabled = isLoading;
-      elements.spinner.classList.toggle('hidden', !isLoading);
-      elements.scrapeButton.textContent = isLoading ? 'Scraping...' : '🔍 Scrape Now';
-    }
-
-    async function triggerScrape() {
-      try {
-        setLoading(true);
-        const response = await fetch('/api/scrape', { method: 'POST' });
-        const result = await response.json();
-        if (!response.ok || !result.success) {
-          throw new Error(result.message || 'Scrape failed');
-        }
-
-        await refreshDashboard();
-      } catch (error) {
-        console.error('Failed to scrape internships:', error);
-        alert(error.message || 'Failed to scrape internships.');
-      } finally {
-        setLoading(false);
-      }
-    }
-
-    async function refreshDashboard() {
-      await Promise.all([fetchStats(), fetchInternships()]);
-    }
-
-    elements.searchInput.addEventListener('input', renderInternships);
-    elements.filterSelect.addEventListener('change', renderInternships);
-    elements.sortSelect.addEventListener('change', renderInternships);
-    elements.scrapeButton.addEventListener('click', triggerScrape);
-
-    refreshDashboard();
-  </script>
+  <script src="/app.js"></script>
 </body>
 </html>
