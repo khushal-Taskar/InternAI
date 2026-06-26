@@ -4,10 +4,60 @@ const { createClient } = require('@libsql/client');
 
 console.log('[database] Initializing Turso (libSQL) database...');
 
+const defaultDatabaseUrl = process.env.VERCEL ? 'file:/tmp/internai.db' : 'file:internai.db';
+
 const db = createClient({
-  url: process.env.TURSO_DATABASE_URL || 'file:internai.db',
+  url: process.env.TURSO_DATABASE_URL || defaultDatabaseUrl,
   authToken: process.env.TURSO_AUTH_TOKEN || undefined
 });
+
+const seedInternships = [
+  {
+    title: 'Software Developer Intern',
+    company: 'TCS',
+    stipend: 'Rs. 15,000/month',
+    stipend_value: 15000,
+    location: 'Work From Home',
+    link: 'https://internshala.com?seed=1',
+    apply_link: 'https://internshala.com?seed=1',
+    source: 'Seed',
+    score: 72,
+    is_remote: 1,
+    duration: '3 months',
+    posted_date: 'Recently',
+    status: 'New'
+  },
+  {
+    title: 'Data Science Intern',
+    company: 'Infosys',
+    stipend: 'Rs. 20,000/month',
+    stipend_value: 20000,
+    location: 'Bangalore',
+    link: 'https://internshala.com?seed=2',
+    apply_link: 'https://internshala.com?seed=2',
+    source: 'Seed',
+    score: 68,
+    is_remote: 0,
+    duration: '6 months',
+    posted_date: 'Recently',
+    status: 'New'
+  },
+  {
+    title: 'Web Development Intern',
+    company: 'Wipro',
+    stipend: 'Rs. 10,000/month',
+    stipend_value: 10000,
+    location: 'Pune',
+    link: 'https://internshala.com?seed=3',
+    apply_link: 'https://internshala.com?seed=3',
+    source: 'Seed',
+    score: 55,
+    is_remote: 0,
+    duration: '2 months',
+    posted_date: 'Recently',
+    status: 'New'
+  }
+];
 
 // ── Row Serialization Helpers ──
 // libSQL Row objects are array-like and don't serialize as plain objects.
@@ -96,6 +146,37 @@ async function initDatabase() {
     ];
     for (const sql of alterCols) {
       try { await db.execute(sql); } catch (_) { /* column already exists */ }
+    }
+
+    const countResult = await db.execute('SELECT COUNT(*) AS total FROM internships');
+    const total = Number(rowToPlain(countResult)?.total || 0);
+    if (!total) {
+      const timestamp = new Date().toISOString();
+      for (const internship of seedInternships) {
+        await db.execute({
+          sql: `INSERT OR IGNORE INTO internships
+            (title, company, stipend, stipend_value, location, link, apply_link,
+             source, score, is_remote, duration, posted_date, date_scraped, status)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+          args: [
+            internship.title,
+            internship.company,
+            internship.stipend,
+            internship.stipend_value,
+            internship.location,
+            internship.link,
+            internship.apply_link,
+            internship.source,
+            internship.score,
+            internship.is_remote,
+            internship.duration,
+            internship.posted_date,
+            timestamp,
+            internship.status
+          ]
+        });
+      }
+      console.log(`[database] Seeded ${seedInternships.length} starter internships.`);
     }
 
     console.log('[database] Database ready with all tables and indexes.');

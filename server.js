@@ -21,7 +21,10 @@ const { sendTelegramNotification } = require('./notifier');
 const { hashPassword, comparePassword, generateToken, authMiddleware, optionalAuth } = require('./auth');
 
 const app = express();
-const PORT = Number(process.env.PORT) || 3000;
+const isVercel = Boolean(process.env.VERCEL);
+const parsedPort = Number.parseInt(process.env.PORT, 10);
+const PORT = Number.isInteger(parsedPort) && parsedPort > 0 ? parsedPort : 3000;
+const HOST = process.env.HOST || '127.0.0.1';
 
 // ── Security & Performance Middleware ──
 app.use(compression());
@@ -298,7 +301,11 @@ app.get('*', (req, res) => {
 });
 
 // ── Start ──
-app.listen(PORT, () => {
-  console.log(`[server] InternAI server listening on http://localhost:${PORT}`);
-  startScheduler();
-});
+if (!isVercel) {
+  app.listen(PORT, HOST, () => {
+    console.log(`[server] InternAI server listening on http://${HOST}:${PORT}`);
+    startScheduler();
+  });
+}
+
+module.exports = app;
