@@ -1,18 +1,8 @@
 require('dotenv').config();
 
 const axios = require('axios');
-const cheerio = require('cheerio');
 
-const REQUEST_HEADERS = {
-  'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-  Accept: 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
-  'Accept-Language': 'en-US,en;q=0.9',
-  'Accept-Encoding': 'gzip, deflate, br',
-  Connection: 'keep-alive',
-  'Cache-Control': 'no-cache'
-};
-
-// ── Mock Data for Each Source ──
+// ── Mock Data Fallback (used if API key missing or rate limited) ──
 
 const MOCK_INTERNSHALA = [
   { title: 'Software Developer Intern', company: 'TCS', stipend: '₹15,000/month', location: 'Work From Home', link: 'https://internshala.com/internship/detail/software-developer-intern-tcs1', duration: '3 months' },
@@ -51,40 +41,7 @@ const MOCK_NAUKRI = [
   { title: 'Blockchain Developer Intern', company: 'Polygon Labs', stipend: '₹40,000/month', location: 'Remote', link: 'https://www.naukri.com/job-listings/blockchain-intern-polygon1', duration: '6 months' }
 ];
 
-// ── Helper Functions ──
-
-function getText(root, selectors) {
-  for (const selector of selectors) {
-    const value = root.find(selector).first().text().replace(/\s+/g, ' ').trim();
-    if (value) return value;
-  }
-  return '';
-}
-
-function getHref(root, selectors) {
-  const defaultSelectors = ['.profile a', 'h3 a', '.title a', 'a'];
-  for (const selector of (selectors || defaultSelectors)) {
-    const href = root.find(selector).first().attr('href');
-    if (href) return href;
-  }
-  return root.attr('href') || '';
-}
-
-function normalizeLink(link, baseUrl) {
-  if (!link) return '#';
-  try {
-    const url = new URL(link, baseUrl);
-    if (url.hostname.includes('naukri.com') && !url.pathname.endsWith('.html')) {
-      url.pathname = `${url.pathname}.html`;
-    }
-    if (url.hostname.includes('aicte-india.org') && !url.pathname.endsWith('.html')) {
-      url.pathname = `${url.pathname}.html`;
-    }
-    return url.toString();
-  } catch (e) {
-    return link;
-  }
-}
+// ── Helper ──
 
 function buildMockResults(mockData, source) {
   const timestamp = new Date().toISOString();
@@ -98,161 +55,136 @@ function buildMockResults(mockData, source) {
   }));
 }
 
-function delay(ms) {
-  return new Promise(resolve => setTimeout(resolve, ms));
+// ── JSearch API (RapidAPI) ──
+
+/**
+ * Converts a JSearch API job result to our internship schema.
+ * Tries to extract stipend from salary fields.
+ */
+function mapJSearchJob(job, source) {
+  const title = job.job_title || 'Internship';
+  const company = job.employer_name || 'Company';
+  const location = job.job_is_remote
+    ? 'Remote'
+    : [job.job_city, job.job_state, job.job_country].filter(Boolean).join(', ') || 'India';
+
+  // Stipend / salary
+  let stipend = 'Not disclosed';
+  if (job.job_min_salary && job.job_max_salary) {
+    const currency = job.job_salary_currency || 'INR';
+    const period = job.job_salary_period || 'MONTH';
+    const periodLabel = period === 'MONTH' ? '/month' : period === 'YEAR' ? '/year' : '';
+    stipend = `${currency} ${Math.round(job.job_min_salary).toLocaleString()}–${Math.round(job.job_max_salary).toLocaleString()}${periodLabel}`;
+  } else if (job.job_min_salary) {
+    stipend = `INR ${Math.round(job.job_min_salary).toLocaleString()}/month`;
+  }
+
+  const link = job.job_apply_link || job.job_google_link || '#';
+
+  return {
+    title,
+    company,
+    stipend,
+    location,
+    link,
+    apply_link: link,
+    source,
+    duration: '',
+    date_scraped: new Date().toISOString(),
+    status: 'New'
+  };
 }
 
-// ── Internshala Scraper ──
+/**
+ * Fetches internships from JSearch API using a given query.
+ * Returns array of mapped internship objects, or null on failure.
+ */
+async function fetchJSearch(query, source) {
+  const apiKey = process.env.RAPIDAPI_KEY;
+
+  if (!apiKey || apiKey === 'your_rapidapi_key_here') {
+    console.log(`[scraper] RAPIDAPI_KEY not set — skipping JSearch for "${query}"`);
+    return null;
+  }
+
+  try {
+    console.log(`[scraper] JSearch query: "${query} internship"`);
+    const response = await axios.get('https://jsearch.p.rapidapi.com/search-v2', {
+      params: {
+        query: `${query} internship`,
+        page: '1',
+        num_pages: '1',
+        country: 'in',
+        language: 'en'
+      },
+      headers: {
+        'X-RapidAPI-Key': apiKey,
+        'X-RapidAPI-Host': 'jsearch.p.rapidapi.com'
+      },
+      timeout: 20000
+    });
+
+    // /search-v2 returns: { status, request_id, parameters, data: { jobs: [...] } }
+    const rawData = response.data;
+    const jobs = Array.isArray(rawData?.data?.jobs)
+      ? rawData.data.jobs
+      : Array.isArray(rawData?.data)
+      ? rawData.data
+      : Array.isArray(rawData?.jobs)
+      ? rawData.jobs
+      : Array.isArray(rawData)
+      ? rawData
+      : [];
+
+    console.log(`[scraper] JSearch "${query}": ${jobs.length} results`);
+    if (jobs.length === 0) {
+      console.warn('[scraper] JSearch returned 0 jobs. Response keys:', Object.keys(rawData || {}));
+    }
+    return jobs.map(job => mapJSearchJob(job, source));
+  } catch (error) {
+    const status = error.response?.status;
+    const msg = error.response?.data?.message || error.message;
+
+    if (status === 429) {
+      console.warn('[scraper] JSearch rate limit hit (429). Falling back to mock data.');
+    } else if (status === 403) {
+      console.warn('[scraper] JSearch API key invalid or not subscribed (403).');
+    } else {
+      console.error(`[scraper] JSearch API error for "${query}":`, msg);
+    }
+    return null;
+  }
+}
+
+// ── Source-specific scrapers using JSearch ──
 
 async function scrapeInternshala() {
-  const urls = [
-    'https://internshala.com/internships/',
-    'https://internshala.com/internships/computer-science/'
-  ];
-
-  try {
-    console.log('[scraper] Scraping Internshala...');
-    const results = [];
-    const seenKeys = new Set();
-
-    for (const url of urls) {
-      try {
-        const response = await axios.get(url, { headers: REQUEST_HEADERS, timeout: 15000 });
-        const $ = cheerio.load(response.data);
-        const selectors = ['.internship_meta', '.individual_internship', '[class*="internship"]'];
-
-        selectors.forEach((selector) => {
-          $(selector).each((index, element) => {
-            const root = $(element);
-            const title = getText(root, ['.profile a', 'h3', '.title']);
-            const company = getText(root, ['.company_name', '.company-name']);
-            const stipend = getText(root, ['.stipend', '[class*="stipend"]']);
-            const location = getText(root, ['.location_link', '.location']);
-            const duration = getText(root, ['.other_detail_item_row .item_body:first-child', '[class*="duration"]']);
-            const link = normalizeLink(getHref(root), url, index);
-
-            if (!title || !company) return;
-            const key = `${title}|${company}`;
-            if (seenKeys.has(key)) return;
-            seenKeys.add(key);
-
-            results.push({
-              title, company, stipend: stipend || 'Not specified',
-              location: location || 'Not specified', link,
-              apply_link: link, source: 'Internshala',
-              duration: duration || '', date_scraped: new Date().toISOString(), status: 'New'
-            });
-          });
-        });
-
-        console.log(`[scraper] Internshala: found ${results.length} from ${url}`);
-      } catch (err) {
-        console.error(`[scraper] Failed Internshala page ${url}:`, err.message);
-      }
-    }
-
-    return results.length > 0 ? results : buildMockResults(MOCK_INTERNSHALA, 'Internshala');
-  } catch (error) {
-    console.error('[scraper] Internshala scrape failed:', error.message);
-    return buildMockResults(MOCK_INTERNSHALA, 'Internshala');
-  }
+  const results = await fetchJSearch('software developer India', 'Internshala');
+  if (results && results.length > 0) return results;
+  return buildMockResults(MOCK_INTERNSHALA, 'Internshala');
 }
-
-// ── AICTE Scraper ──
 
 async function scrapeAICTE() {
-  try {
-    console.log('[scraper] Scraping AICTE internship portal...');
-    const url = 'https://internship.aicte-india.org/';
-    const response = await axios.get(url, { headers: REQUEST_HEADERS, timeout: 15000 });
-    const $ = cheerio.load(response.data);
-    const results = [];
-
-    // AICTE portal uses dynamic rendering — attempt to parse any static listings
-    $('.internship-card, .intern-listing, [class*="internship"], .card').each((index, element) => {
-      const root = $(element);
-      const title = getText(root, ['h3', 'h4', '.title', '.internship-title']);
-      const company = getText(root, ['.organization', '.company', '.org-name']);
-      const stipend = getText(root, ['.stipend', '.amount']);
-      const location = getText(root, ['.location', '.city']);
-      const link = normalizeLink(getHref(root), url, index);
-
-      if (title && company) {
-        results.push({
-          title, company, stipend: stipend || 'As per AICTE norms',
-          location: location || 'India', link,
-          apply_link: link, source: 'AICTE',
-          duration: '', date_scraped: new Date().toISOString(), status: 'New'
-        });
-      }
-    });
-
-    if (results.length > 0) {
-      console.log(`[scraper] AICTE: found ${results.length} internships`);
-      return results;
-    }
-
-    return buildMockResults(MOCK_AICTE, 'AICTE');
-  } catch (error) {
-    console.error('[scraper] AICTE scrape failed:', error.message);
-    return buildMockResults(MOCK_AICTE, 'AICTE');
-  }
+  const results = await fetchJSearch('data science ML India', 'AICTE');
+  if (results && results.length > 0) return results;
+  return buildMockResults(MOCK_AICTE, 'AICTE');
 }
 
-// ── Naukri Scraper ──
-
 async function scrapeNaukri() {
-  try {
-    console.log('[scraper] Scraping Naukri.com...');
-    const url = 'https://www.naukri.com/internship-jobs';
-    const response = await axios.get(url, {
-      headers: { ...REQUEST_HEADERS, Referer: 'https://www.naukri.com/' },
-      timeout: 15000
-    });
-    const $ = cheerio.load(response.data);
-    const results = [];
-
-    // Naukri listing selectors
-    $('.srp-jobtuple-wrapper, .jobTuple, [class*="job-listing"], .cust-job-tuple').each((index, element) => {
-      const root = $(element);
-      const title = getText(root, ['.title', 'a.title', '.desig', 'h2']);
-      const company = getText(root, ['.comp-name', '.company-name', '.subTitle']);
-      const stipend = getText(root, ['.salary', '.sal', '[class*="salary"]']);
-      const location = getText(root, ['.loc', '.location', '.locWdth']);
-      const link = normalizeLink(getHref(root, ['a.title', 'h2 a', 'a']), url, index);
-
-      if (title && company) {
-        results.push({
-          title, company, stipend: stipend || 'Not disclosed',
-          location: location || 'India', link,
-          apply_link: link, source: 'Naukri',
-          duration: '', date_scraped: new Date().toISOString(), status: 'New'
-        });
-      }
-    });
-
-    if (results.length > 0) {
-      console.log(`[scraper] Naukri: found ${results.length} internships`);
-      return results;
-    }
-
-    return buildMockResults(MOCK_NAUKRI, 'Naukri');
-  } catch (error) {
-    console.error('[scraper] Naukri scrape failed:', error.message);
-    return buildMockResults(MOCK_NAUKRI, 'Naukri');
-  }
+  const results = await fetchJSearch('remote work from home India', 'Naukri');
+  if (results && results.length > 0) return results;
+  return buildMockResults(MOCK_NAUKRI, 'Naukri');
 }
 
 // ── Combined Scraper ──
 
 async function scrapeInternships() {
-  // Vercel serverless functions have a 10s timeout — live scraping of external
-  // sites takes too long and those sites block bots anyway.
-  // On Vercel, use mock data instantly; on local dev, attempt real scraping.
+  const apiKey = process.env.RAPIDAPI_KEY;
   const isVercel = !!(process.env.VERCEL || process.env.VERCEL_ENV);
 
-  if (isVercel) {
-    console.log('[scraper] Vercel environment detected — using mock data for instant response.');
+  // On Vercel without API key, use mock instantly (no scraping overhead)
+  if (isVercel && (!apiKey || apiKey === 'your_rapidapi_key_here')) {
+    console.log('[scraper] Vercel env + no API key — using mock data.');
     return [
       ...buildMockResults(MOCK_INTERNSHALA, 'Internshala'),
       ...buildMockResults(MOCK_AICTE, 'AICTE'),
@@ -260,31 +192,36 @@ async function scrapeInternships() {
     ];
   }
 
+  console.log('[scraper] Starting JSearch multi-query scrape...');
+
   try {
-    console.log('[scraper] Starting multi-source scrape...');
     const allResults = [];
     const seenLinks = new Set();
 
-    const internshalaResults = await scrapeInternshala();
-    internshalaResults.forEach(item => {
-      if (!seenLinks.has(item.link)) { seenLinks.add(item.link); allResults.push(item); }
-    });
+    const addResults = (items) => {
+      for (const item of items) {
+        if (!seenLinks.has(item.link)) {
+          seenLinks.add(item.link);
+          allResults.push(item);
+        }
+      }
+    };
 
-    await delay(2000);
+    // Run sequentially with small delay to avoid 429 rate limiting
+    const internshalaResults = await scrapeInternshala();
+    addResults(internshalaResults);
+
+    await new Promise(r => setTimeout(r, 1500));
 
     const aicteResults = await scrapeAICTE();
-    aicteResults.forEach(item => {
-      if (!seenLinks.has(item.link)) { seenLinks.add(item.link); allResults.push(item); }
-    });
+    addResults(aicteResults);
 
-    await delay(2000);
+    await new Promise(r => setTimeout(r, 1500));
 
     const naukriResults = await scrapeNaukri();
-    naukriResults.forEach(item => {
-      if (!seenLinks.has(item.link)) { seenLinks.add(item.link); allResults.push(item); }
-    });
+    addResults(naukriResults);
 
-    console.log(`[scraper] Multi-source scrape completed: ${allResults.length} total`);
+    console.log(`[scraper] JSearch scrape done: ${allResults.length} total unique internships`);
     return allResults;
   } catch (error) {
     console.error('[scraper] Multi-source scrape failed:', error.message);
@@ -302,6 +239,10 @@ if (require.main === module) {
   scrapeInternships()
     .then((results) => {
       console.log(`[scraper] Finished standalone run with ${results.length} internships.`);
+      if (results.length > 0) {
+        console.log('\nSample result:');
+        console.log(JSON.stringify(results[0], null, 2));
+      }
     })
     .catch((error) => {
       console.error('[scraper] Standalone run failed:', error.message);
