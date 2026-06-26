@@ -207,16 +207,18 @@ async function scrapeInternships() {
       }
     };
 
-    // Run sequentially with small delay to avoid 429 rate limiting
+    // Run sequentially — shorter delay on Vercel (30s max), longer locally
+    const delay = isVercel ? 800 : 1500;
+
     const internshalaResults = await scrapeInternshala();
     addResults(internshalaResults);
 
-    await new Promise(r => setTimeout(r, 1500));
+    await new Promise(r => setTimeout(r, delay));
 
     const aicteResults = await scrapeAICTE();
     addResults(aicteResults);
 
-    await new Promise(r => setTimeout(r, 1500));
+    await new Promise(r => setTimeout(r, delay));
 
     const naukriResults = await scrapeNaukri();
     addResults(naukriResults);
